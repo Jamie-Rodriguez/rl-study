@@ -146,7 +146,10 @@ def sarsa(
     for episode_num in range(num_episodes):
         if debug and episode_num > 0 and episode_num % debug_print_period == 0:
             print(
-                f"episode: {episode_num}, learning rate: {learning_rate}, epsilon: {epsilon}, avg score: {results[episode_num - 1]}"
+                f"episode: {episode_num}, "
+                f"learning rate: {learning_rate}, "
+                f"epsilon: {epsilon}, "
+                f"avg score: {results[episode_num - 1]}"
             )
 
         state, _ = env.reset()
@@ -180,7 +183,8 @@ def sarsa(
             0.5, episode_num / learning_rate_half_life
         )
         epsilon = max(
-            epsilon_min, epsilon_start * pow(0.5, episode_num / epsilon_half_life)
+            epsilon_min,
+            epsilon_start * pow(0.5, episode_num / epsilon_half_life)
         )
         moving_average.append(total_episode_return)
         results[episode_num] = sum(moving_average) / len(moving_average)
@@ -210,7 +214,10 @@ def q_learning(
     for episode_num in range(num_episodes):
         if debug and episode_num > 0 and episode_num % debug_print_period == 0:
             print(
-                f"episode: {episode_num}, learning rate: {learning_rate}, epsilon: {epsilon}, avg score: {results[episode_num - 1]}"
+                f"episode: {episode_num}, "
+                f"learning rate: {learning_rate}, "
+                f"epsilon: {epsilon}, "
+                f"avg score: {results[episode_num - 1]}"
             )
 
         state, _ = env.reset()
@@ -243,7 +250,8 @@ def q_learning(
             0.5, episode_num / learning_rate_half_life
         )
         epsilon = max(
-            epsilon_min, epsilon_start * pow(0.5, episode_num / epsilon_half_life)
+            epsilon_min,
+            epsilon_start * pow(0.5, episode_num / epsilon_half_life)
         )
         moving_average.append(total_episode_return)
         results[episode_num] = sum(moving_average) / len(moving_average)
@@ -277,9 +285,7 @@ def mc_prediction_every_visit(
 
     for episode_num in range(num_episodes):
         if debug and episode_num > 0 and episode_num % debug_print_period == 0:
-            print(
-                f"episode: {episode_num}, epsilon: {epsilon}, avg score: {results[episode_num - 1]}"
-            )
+            print(f"episode: {episode_num}")
 
         episode = play_episode(env, policy)
 
@@ -321,7 +327,9 @@ def mc_control_every_visit(
     for episode_num in range(num_episodes):
         if debug and episode_num > 0 and episode_num % debug_print_period == 0:
             print(
-                f"episode: {episode_num}, epsilon: {epsilon}, avg score: {results[episode_num - 1]}"
+                f"episode: {episode_num}, "
+                f"epsilon: {epsilon}, "
+                f"avg score: {results[episode_num - 1]}"
             )
 
         def policy(state: State) -> Action:
@@ -348,7 +356,8 @@ def mc_control_every_visit(
             q_values[state][action] += (1 / visits) * (experienced_return - q)
 
         epsilon = max(
-            epsilon_min, epsilon_start * pow(0.5, episode_num / epsilon_half_life)
+            epsilon_min,
+            epsilon_start * pow(0.5, episode_num / epsilon_half_life)
         )
         moving_average.append(total_episode_return)
         results[episode_num] = sum(moving_average) / len(moving_average)
@@ -502,5 +511,9 @@ if __name__ == "__main__":
 
     print("Plotting results...")
     plot_performance(
-        random_results, mc_results, sarsa_results, q_learning_results, hyperparameters
+        random_results,
+        mc_results,
+        sarsa_results,
+        q_learning_results,
+        hyperparameters
     )
