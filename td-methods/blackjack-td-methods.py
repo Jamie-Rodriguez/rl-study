@@ -19,7 +19,7 @@ type Policy = Callable[[State], Action]
 num_episodes = int(os.environ.get("NUM_EPS", "100_000"))
 
 # Minimum value epsilon should fall to
-epsilon_min = 0.0001
+epsilon_min = 1e-4
 
 # ---------------------------------- Results ----------------------------------
 moving_avg_window_size = floor(num_episodes / 20)
@@ -315,7 +315,7 @@ def mc_control_every_visit(
     epsilon_start: float,
     epsilon_half_life: float,
 ) -> tuple[NDArray[np.float64], NDArray[np.float16]]:
-    q_values = np.full(state_action_space_shape, 10, np.float64)
+    q_values = np.full(state_action_space_shape, 0, np.float64)
     num_visits = np.zeros(state_action_space_shape, np.int64)
 
     epsilon = epsilon_start
@@ -406,18 +406,18 @@ if __name__ == "__main__":
             "epsilon_half_life": num_episodes / 10,
         },
         "SARSA": {
-            "learning_rate_start": 0.08,
-            "learning_rate_half_life": num_episodes / 3,
-            "discount_factor": 0.99,
-            "epsilon_start": 0.9,
-            "epsilon_half_life": num_episodes / 10,
+            "learning_rate_start": 5e-7,
+            "learning_rate_half_life": num_episodes / 2,
+            "discount_factor": 0.9,
+            "epsilon_start": 0.95,
+            "epsilon_half_life": num_episodes / 5,
         },
         "Q-learning": {
-            "learning_rate_start": 0.10,
-            "learning_rate_half_life": num_episodes / 10,
-            "discount_factor": 0.99,
-            "epsilon_start": 0.9,
-            "epsilon_half_life": num_episodes / 10,
+            "learning_rate_start": 5e-7,
+            "learning_rate_half_life": num_episodes / 2,
+            "discount_factor": 0.9,
+            "epsilon_start": 0.95,
+            "epsilon_half_life": num_episodes / 5,
         },
     }
 
