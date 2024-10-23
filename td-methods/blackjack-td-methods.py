@@ -353,7 +353,7 @@ def mc_control_every_visit(
             q = q_values[score][dealer][ace][action]
             visits = num_visits[score][dealer][ace][action]
 
-            q_values[state][action] += (1 / visits) * (experienced_return - q)
+            q_values[score][dealer][ace][action] += (1 / visits) * (experienced_return - q)
 
         epsilon = max(
             epsilon_min,
