@@ -417,9 +417,6 @@ if __name__ == "__main__":
     models = [
         {
             "label": "Monte Carlo",
-            "discount_factor": hyperparameters["monte_carlo"]["discount_factor"],
-            "epsilon_start": hyperparameters["monte_carlo"]["epsilon_start"],
-            "epsilon_half_life": hyperparameters["monte_carlo"]["epsilon_half_life"],
             "algo_func": mc_control_every_visit,
             "args_list": [
                 env,
@@ -433,13 +430,6 @@ if __name__ == "__main__":
         },
         {
             "label": "SARSA",
-            "learning_rate_start": hyperparameters["sarsa"]["learning_rate_start"],
-            "learning_rate_half_life": hyperparameters["sarsa"][
-                "learning_rate_half_life"
-            ],
-            "discount_factor": hyperparameters["sarsa"]["discount_factor"],
-            "epsilon_start": hyperparameters["sarsa"]["epsilon_start"],
-            "epsilon_half_life": hyperparameters["sarsa"]["epsilon_half_life"],
             "algo_func": sarsa,
             "args_list": [
                 env,
@@ -455,13 +445,6 @@ if __name__ == "__main__":
         },
         {
             "label": "Q-learning",
-            "learning_rate_start": hyperparameters["q_learning"]["learning_rate_start"],
-            "learning_rate_half_life": hyperparameters["q_learning"][
-                "learning_rate_half_life"
-            ],
-            "discount_factor": hyperparameters["q_learning"]["discount_factor"],
-            "epsilon_start": hyperparameters["q_learning"]["epsilon_start"],
-            "epsilon_half_life": hyperparameters["q_learning"]["epsilon_half_life"],
             "algo_func": q_learning,
             "args_list": [
                 env,
