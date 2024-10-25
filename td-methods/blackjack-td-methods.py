@@ -2,7 +2,7 @@ import os
 from math import floor
 from collections.abc import Callable
 from collections import deque
-from typing import Mapping
+from typing import Mapping, Any
 import gymnasium as gym
 import numpy as np
 from numpy.typing import NDArray
@@ -19,7 +19,7 @@ type Policy = Callable[[State], Action]
 num_episodes = int(os.environ.get("NUM_EPS", "100_000"))
 
 # Minimum value epsilon should fall to
-epsilon_min = 1e-4
+epsilon_min = 1e-2
 
 # ---------------------------------- Results ----------------------------------
 moving_avg_window_size = floor(num_episodes / 20)
@@ -58,7 +58,9 @@ def epsilon_greedy_policy(
 
 
 # Play through with a random policy to act as a control variable
-def play_random_policy(env: gym.Env, num_episodes: int) -> NDArray[np.float16]:
+def play_random_policy(
+    env: gym.Env, num_episodes: int
+) -> tuple[None, NDArray[np.float16]]:
     # Recording performance metrics
     moving_average = deque(maxlen=moving_avg_window_size)
     results = np.zeros(num_episodes, np.float16)
@@ -85,7 +87,7 @@ def play_random_policy(env: gym.Env, num_episodes: int) -> NDArray[np.float16]:
         moving_average.append(total_episode_return)
         results[episode_num] = sum(moving_average) / len(moving_average)
 
-    return results
+    return None, results
 
 
 # TD(0) prediction
@@ -154,6 +156,8 @@ def sarsa(
 
         state, _ = env.reset()
         action = epsilon_greedy_policy(state, q_values, epsilon)
+        # Total *undiscounted* rewards gained from episode
+        # Only used to report performance
         total_episode_return = 0
         done = False
 
@@ -183,8 +187,7 @@ def sarsa(
             0.5, episode_num / learning_rate_half_life
         )
         epsilon = max(
-            epsilon_min,
-            epsilon_start * pow(0.5, episode_num / epsilon_half_life)
+            epsilon_min, epsilon_start * pow(0.5, episode_num / epsilon_half_life)
         )
         moving_average.append(total_episode_return)
         results[episode_num] = sum(moving_average) / len(moving_average)
@@ -221,12 +224,15 @@ def q_learning(
             )
 
         state, _ = env.reset()
+        # Total *undiscounted* rewards gained from episode
+        # Only used to report performance
         total_episode_return = 0
         done = False
 
         while not done:
             action = epsilon_greedy_policy(state, q_values, epsilon)
             next_state, reward, terminated, truncated, _ = env.step(action)
+            done = terminated or truncated
             total_episode_return += reward
 
             # Destructuring tuples to reduce line length
@@ -235,23 +241,22 @@ def q_learning(
 
             # Q-learning update
             best_action = np.argmax(q_values[next_score][next_dealer][next_ace])
-            td_target = (
-                reward
-                + discount_factor
-                * q_values[next_score][next_dealer][next_ace][best_action]
-            )
+            # Don't use future reward if state is a terminal state
+            future_q_value = (not done) * q_values[next_score][next_dealer][next_ace][
+                best_action
+            ]
+
+            td_target = reward + discount_factor * future_q_value
             td_error = td_target - q_values[score][dealer][ace][action]
             q_values[score][dealer][ace][action] += learning_rate * td_error
 
             state = next_state
-            done = terminated or truncated
 
         learning_rate = learning_rate_start * pow(
             0.5, episode_num / learning_rate_half_life
         )
         epsilon = max(
-            epsilon_min,
-            epsilon_start * pow(0.5, episode_num / epsilon_half_life)
+            epsilon_min, epsilon_start * pow(0.5, episode_num / epsilon_half_life)
         )
         moving_average.append(total_episode_return)
         results[episode_num] = sum(moving_average) / len(moving_average)
@@ -267,9 +272,11 @@ def play_episode(env: gym.Env, policy: Policy) -> list[tuple[State, Action, int]
     while not done:
         action = policy(state)
         next_state, reward, terminated, truncated, _ = env.step(action)
+
         episode.append((state, action, reward))
-        state = next_state
+
         done = terminated or truncated
+        state = next_state
 
     return episode
 
@@ -338,58 +345,45 @@ def mc_control_every_visit(
         episode = play_episode(env, policy)
 
         experienced_return = 0
-        total_episode_return = 0
 
-        for timestep in range(len(episode) - 1, -1, -1):
-            state, action, reward = episode[timestep]
+        for timestep in reversed(episode):
+            state, action, reward = timestep
 
             score, dealer, ace = state
             experienced_return = discount_factor * experienced_return + reward
 
-            total_episode_return += reward
             num_visits[score][dealer][ace][action] += 1
 
             # Just to escape the "line too long" linting errors
             q = q_values[score][dealer][ace][action]
             visits = num_visits[score][dealer][ace][action]
 
-            q_values[score][dealer][ace][action] += (1 / visits) * (experienced_return - q)
+            q_values[score][dealer][ace][action] += (1 / visits) * (
+                experienced_return - q
+            )
 
         epsilon = max(
-            epsilon_min,
-            epsilon_start * pow(0.5, episode_num / epsilon_half_life)
+            epsilon_min, epsilon_start * pow(0.5, episode_num / epsilon_half_life)
         )
+        total_episode_return = sum(reward for _, _, reward in episode)
         moving_average.append(total_episode_return)
         results[episode_num] = sum(moving_average) / len(moving_average)
 
     return q_values, results
 
 
-def plot_performance(
-    random_results: NDArray[np.float16],
-    mc_results: NDArray[np.float16],
-    sarsa_results: NDArray[np.float16],
-    q_learning_results: NDArray[np.float16],
-    hyperparameters: Mapping[str, float],
-) -> None:
+def plot_performance(models: list[Mapping[str, Any]]) -> None:
     fig, ax = plt.subplots()
-    ax.plot(random_results, label="Random")
-    ax.plot(mc_results, label="Monte Carlo")
-    ax.plot(sarsa_results, label="SARSA")
-    ax.plot(q_learning_results, label="Q-Learning")
+
+    for model in models:
+        ax.plot(model["performance_results"], label=model["label"])
+
     ax.set_xlim(0, num_episodes)
     ax.set_ylim(-0.25, -0.1)
     ax.set_xlabel("Episode")
     ax.set_ylabel("Average Score from Game")
     ax.set_title("Performance Comparison of RL Algorithms in Blackjack")
     ax.legend()
-
-    hyperparams_text = "Hyperparameters:\n"
-    for algo, params in hyperparameters.items():
-        hyperparams_text += f"    {algo}:\n"
-        for key, value in params.items():
-            hyperparams_text += f"      {key}: {value}\n"
-
     fig.tight_layout()
     fig.savefig("blackjack_rl_comparison.png")
     plt.show()
@@ -400,120 +394,120 @@ env = gym.make("Blackjack-v1", natural=False, sab=True)
 
 if __name__ == "__main__":
     hyperparameters = {
-        "Monte Carlo": {
-            "discount_factor": 0.9,
-            "epsilon_start": 0.9,
-            "epsilon_half_life": num_episodes / 10,
+        "monte_carlo": {
+            "discount_factor": 0.8,
+            "epsilon_start": 0.99,
+            "epsilon_half_life": num_episodes / 4,
         },
-        "SARSA": {
+        "sarsa": {
             "learning_rate_start": 5e-7,
             "learning_rate_half_life": num_episodes / 2,
             "discount_factor": 0.9,
             "epsilon_start": 0.95,
             "epsilon_half_life": num_episodes / 5,
         },
-        "Q-learning": {
-            "learning_rate_start": 5e-7,
+        "q_learning": {
+            "learning_rate_start": 1e-2,
             "learning_rate_half_life": num_episodes / 2,
-            "discount_factor": 0.9,
-            "epsilon_start": 0.95,
-            "epsilon_half_life": num_episodes / 5,
+            "discount_factor": 0.95,
+            "epsilon_start": 0.99,
+            "epsilon_half_life": num_episodes / 2,
         },
     }
+    models = [
+        {
+            "label": "Monte Carlo",
+            "discount_factor": hyperparameters["monte_carlo"]["discount_factor"],
+            "epsilon_start": hyperparameters["monte_carlo"]["epsilon_start"],
+            "epsilon_half_life": hyperparameters["monte_carlo"]["epsilon_half_life"],
+            "algo_func": mc_control_every_visit,
+            "args_list": [
+                env,
+                num_episodes,
+                hyperparameters["monte_carlo"]["discount_factor"],
+                hyperparameters["monte_carlo"]["epsilon_start"],
+                hyperparameters["monte_carlo"]["epsilon_half_life"],
+            ],
+            "q_func": None,
+            "performance_results": None,
+        },
+        {
+            "label": "SARSA",
+            "learning_rate_start": hyperparameters["sarsa"]["learning_rate_start"],
+            "learning_rate_half_life": hyperparameters["sarsa"][
+                "learning_rate_half_life"
+            ],
+            "discount_factor": hyperparameters["sarsa"]["discount_factor"],
+            "epsilon_start": hyperparameters["sarsa"]["epsilon_start"],
+            "epsilon_half_life": hyperparameters["sarsa"]["epsilon_half_life"],
+            "algo_func": sarsa,
+            "args_list": [
+                env,
+                num_episodes,
+                hyperparameters["sarsa"]["learning_rate_start"],
+                hyperparameters["sarsa"]["learning_rate_half_life"],
+                hyperparameters["sarsa"]["discount_factor"],
+                hyperparameters["sarsa"]["epsilon_start"],
+                hyperparameters["sarsa"]["epsilon_half_life"],
+            ],
+            "q_func": None,
+            "performance_results": None,
+        },
+        {
+            "label": "Q-learning",
+            "learning_rate_start": hyperparameters["q_learning"]["learning_rate_start"],
+            "learning_rate_half_life": hyperparameters["q_learning"][
+                "learning_rate_half_life"
+            ],
+            "discount_factor": hyperparameters["q_learning"]["discount_factor"],
+            "epsilon_start": hyperparameters["q_learning"]["epsilon_start"],
+            "epsilon_half_life": hyperparameters["q_learning"]["epsilon_half_life"],
+            "algo_func": q_learning,
+            "args_list": [
+                env,
+                num_episodes,
+                hyperparameters["q_learning"]["learning_rate_start"],
+                hyperparameters["q_learning"]["learning_rate_half_life"],
+                hyperparameters["q_learning"]["discount_factor"],
+                hyperparameters["q_learning"]["epsilon_start"],
+                hyperparameters["q_learning"]["epsilon_half_life"],
+            ],
+            "q_func": None,
+            "performance_results": None,
+        },
+        {
+            "label": "Random",
+            "algo_func": play_random_policy,
+            "args_list": [env, num_episodes],
+            "q_func": None,
+            "performance_results": None,
+        },
+    ]
 
-    print("Monte Carlo control to find optimal policy")
-    print("==========================================")
+    for model in models:
+        print(f"\nTraining: {model['label']}")
+        print(
+            "================================================================================"
+        )
+        model["q_func"], model["performance_results"] = model["algo_func"](
+            *model["args_list"]
+        )
 
-    mc_q_values, mc_results = mc_control_every_visit(
-        env,
-        num_episodes,
-        hyperparameters["Monte Carlo"]["discount_factor"],
-        hyperparameters["Monte Carlo"]["epsilon_start"],
-        hyperparameters["Monte Carlo"]["epsilon_half_life"],
-    )
+        if debug and model["q_func"] is not None:
+            print("Printing found Q-values (state-action values) for optimal policy...")
 
-    if debug:
-        print("Printing found Q-values (state-action values) for optimal policy...")
-
-        for current_score in range(state_space_shape[0]):
-            print(f"current score: {current_score}")
-            for dealers_card in range(state_space_shape[1]):
-                print(f"\tdealer's card: {dealers_card}")
-                for usable_ace in range(state_space_shape[2]):
-                    print(f"\t\tusable ace: {usable_ace}")
-                    print("\t\t\taction values:")
-                    print("\t\t\t(0 = stand, 1 = hit)")
-                    print(
-                        f"\t\t\t{mc_q_values[current_score][dealers_card][usable_ace]}"
-                    )
-    print(f"Final average score: {mc_results[-1]}")
-
-    print("SARSA (On-policy TD(0) control) to find optimal policy")
-    print("======================================================")
-
-    sarsa_q_values, sarsa_results = sarsa(
-        env,
-        num_episodes,
-        hyperparameters["SARSA"]["learning_rate_start"],
-        hyperparameters["SARSA"]["learning_rate_half_life"],
-        hyperparameters["SARSA"]["discount_factor"],
-        hyperparameters["SARSA"]["epsilon_start"],
-        hyperparameters["SARSA"]["epsilon_half_life"],
-    )
-
-    if debug:
-        print("Printing found Q-values (state-action values) for optimal policy...")
-
-        for current_score in range(state_space_shape[0]):
-            print(f"current score: {current_score}")
-            for dealers_card in range(state_space_shape[1]):
-                print(f"\tdealer's card: {dealers_card}")
-                for usable_ace in range(state_space_shape[2]):
-                    print(f"\t\tusable ace: {usable_ace}")
-                    print("\t\t\taction values:")
-                    print("\t\t\t(0 = stand, 1 = hit)")
-                    print(
-                        f"\t\t\t{sarsa_q_values[current_score][dealers_card][usable_ace]}"
-                    )
-    print(f"Final average score: {sarsa_results[-1]}")
-
-    print("Q-learning (Off-policy TD(0) control) to find optimal policy")
-    print("============================================================")
-
-    q_learning_q_values, q_learning_results = q_learning(
-        env,
-        num_episodes,
-        hyperparameters["Q-learning"]["learning_rate_start"],
-        hyperparameters["Q-learning"]["learning_rate_half_life"],
-        hyperparameters["Q-learning"]["discount_factor"],
-        hyperparameters["Q-learning"]["epsilon_start"],
-        hyperparameters["Q-learning"]["epsilon_half_life"],
-    )
-
-    if debug:
-        print("Printing found Q-values (state-action values) for optimal policy...")
-
-        for current_score in range(state_space_shape[0]):
-            print(f"current score: {current_score}")
-            for dealers_card in range(state_space_shape[1]):
-                print(f"\tdealer's card: {dealers_card}")
-                for usable_ace in range(state_space_shape[2]):
-                    print(f"\t\tusable ace: {usable_ace}")
-                    print("\t\t\taction values:")
-                    print("\t\t\t(0 = stand, 1 = hit)")
-                    print(
-                        f"\t\t\t{q_learning_q_values[current_score][dealers_card][usable_ace]}"
-                    )
-    print(f"Final average score: {q_learning_results[-1]}")
-
-    print("Recording results for random agent...")
-    random_results = play_random_policy(env, num_episodes)
+            for current_score in range(state_space_shape[0]):
+                print(f"current score: {current_score}")
+                for dealers_card in range(state_space_shape[1]):
+                    print(f"\tdealer's card: {dealers_card}")
+                    for usable_ace in range(state_space_shape[2]):
+                        print(f"\t\tusable ace: {usable_ace}")
+                        print("\t\t\taction values:")
+                        print("\t\t\t(0 = stand, 1 = hit)")
+                        print(
+                            f"\t\t\t{model['q_func'][current_score][dealers_card][usable_ace]}"
+                        )
+        print(f"Final average score: {model['performance_results'][-1]}")
 
     print("Plotting results...")
-    plot_performance(
-        random_results,
-        mc_results,
-        sarsa_results,
-        q_learning_results,
-        hyperparameters
-    )
+    plot_performance(models)
