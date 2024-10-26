@@ -395,9 +395,9 @@ env = gym.make("Blackjack-v1", natural=False, sab=True)
 if __name__ == "__main__":
     hyperparameters = {
         "monte_carlo": {
-            "discount_factor": 0.8,
-            "epsilon_start": 0.99,
-            "epsilon_half_life": num_episodes / 4,
+            "discount_factor": 0.1,
+            "epsilon_start": 0.1,
+            "epsilon_half_life": num_episodes / 3,
         },
         "sarsa": {
             "learning_rate_start": 5e-7,
